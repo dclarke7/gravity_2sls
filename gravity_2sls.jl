@@ -51,6 +51,7 @@ function coverage_probability(x,β)
 end
 
 # Computes K distances for N observations
+# (Credit to Jonathan Dingel for this function)
 function generate_distances(N,K)
     dist_log = zeros(N*(N-1),K) # initialize matrix
     for k in 1:K
@@ -58,7 +59,7 @@ function generate_distances(N,K)
         coords =  hcat(rand(Uniform(-90,90),N),    # lat
                        rand(Uniform(-180,180),N))' # long
         distance_log = log.(pairwise(Euclidean(),coords,dims=2))        # N x N distance matrix
-	    distance_log_vec = dropdims(reshape(distance_log,N^2,1),dims=2) # N*N x 1
+	distance_log_vec = dropdims(reshape(distance_log,N^2,1),dims=2) # N*N x 1
         dist_log[:,k] = filter(d->d!=-Inf,distance_log_vec)             # N*(N-1) x 1
     end
     return dist_log
@@ -103,7 +104,7 @@ for ρ in rhos
         μi  = rand(Normal(0,1),N)                                               # auxiliary error for contamination
         ηij = (1/sqrt.(2)) .*                                                    # bilateral error with contamination ρ
                             (ρ.*repeat(εi,inner=(N-1),outer=1) +                # ηij = [ ρ * ε_i + √1-ρ^2 * μ_i
-                            sqrt.(1-ρ.^2).*repeat(μi,inner=(N-1),outer=1))# +
+                            sqrt.(1-ρ.^2).*repeat(μi,inner=(N-1),outer=1)) # +
                             #rand(Normal(0,1),N*(N-1)))
         # create N*(N-1) x K matrix of distances, plus a constant
         Zij = hcat(ones(N*(N-1)),generate_distances(N,K))
@@ -122,7 +123,7 @@ for ρ in rhos
         # OLS
         X = hcat(ones(N),Ti)                                                    # add constant
         β_hat_ols = inv(X'X)X'Yi                                                # estimate ols beta
-        ε_hat_ols = Yi - X*[1,β]                                                # ols residuals
+        ε_hat_ols = Yi - X*β_hat_ols                                            # ols residuals
         σ² = (inv(X'X) * (X' * Diagonal(ε_hat_ols*ε_hat_ols') * X) * inv(X'X))  # ols vcv matrix (Cameron & Trivedi eq. 4.21)
         #σ² = inv(x'x) * ε_hat_ols'ε_hat_ols / (N-K)                            # homoskedastic error estimate
         ols_results[r,:] = [ β_hat_ols[2,1] , sqrt.(σ²[2,2]) ]                  # store ols results
