@@ -102,10 +102,10 @@ for ρ in rhos
 
         εi  = rand(Normal(0,1),N)                                               # output equation error
         μi  = rand(Normal(0,1),N)                                               # auxiliary error for contamination
-        ηij = (1/sqrt.(2)) .*                                                    # bilateral error with contamination ρ
-                            (ρ.*repeat(εi,inner=(N-1),outer=1) +                # ηij = [ ρ * ε_i + √1-ρ^2 * μ_i
-                            sqrt.(1-ρ.^2).*repeat(μi,inner=(N-1),outer=1)) # +
-                            #rand(Normal(0,1),N*(N-1)))
+        ηij = (ρ.*repeat(εi,inner=(N-1),outer=1) +
+                sqrt.(1-ρ.^2).*repeat(μi,inner=(N-1),outer=1))                  # ηij = ρ*ε_i + √(1-ρ^2) * μ_i
+        #rand(Normal(0,1),N*(N-1)))
+
         # create N*(N-1) x K matrix of distances, plus a constant
         Zij = hcat(ones(N*(N-1)),generate_distances(N,K))
 
