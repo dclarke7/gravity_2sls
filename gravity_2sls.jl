@@ -7,7 +7,9 @@
 #Pkg.add("Random")
 #Pkg.add("Plots")
 #Pkg.add("LaTeXStrings")
-using LinearAlgebra, Distributions, Distances, Random, Plots, LaTeXStrings
+#Pkg.add("KernelDensity")
+using LinearAlgebra, Distributions, Distances, Random, Plots, LaTeXStrings, KernelDensity
+print("packages installed.","\n")
 
 ###############################################################################
 # functions
@@ -48,6 +50,21 @@ function coverage_probability(x,β)
     cp = (ci[:,2] .< β) + (ci[:,1] .> β)
     cp = filter(b->b==2,cp)
     cp = length(cp)/size(x,1)
+end
+
+# Compute first-stage F statistic
+function fstat(x,z)
+    k = size(z,2)                                                               # number of instruments
+    z = hcat(ones(N),z)                                                         # add constant
+    π_hat = inv(z'z)z'x                                                         # first stage regression coefficient
+    xhat = z*π_hat                                                              # fitted values
+    μ_hat = x - z*π_hat                                                         # first stage errors
+    # F statistic
+    xdm = xhat .- sum(x)/length(x)
+    mst = xdm'xdm/k
+    mse = μ_hat'μ_hat/(N-k-1)
+    F = mst/mse
+    return F
 end
 
 # Computes K distances for N observations
@@ -91,11 +108,13 @@ Z_size = 0.5                                         # strength of instruments
 ###############################################################################
 # Gravity Instrument Simulation
 
-iter = 1000 # number of iterations
+iter = 10 # number of iterations
 ols_results = zeros(iter,2); # storage for estimates
-iv_results  = zeros(iter,2); # storage for estimates
+iv_results  = zeros(iter,3); # storage for estimates
 rhos = [0,0.1,0.5] # ρ is correlation between errors, or level of endogeneity
-for ρ in rhos
+fplot = Plots.plot() # plot for distribution of F statistics
+colors = ["black","red","green"]
+for (ρ,c) in zip(rhos,colors)
     for r in 1:iter
         # set seed
         Random.seed!(r+1000);
@@ -128,19 +147,19 @@ for ρ in rhos
         #σ² = inv(x'x) * ε_hat_ols'ε_hat_ols / (N-K)                            # homoskedastic error estimate
         ols_results[r,:] = [ β_hat_ols[2,1] , sqrt.(σ²[2,2]) ]                  # store ols results
 
-        # 2SLS
-        iv_results[r,:] = twosls(Ti,Yi,Tihat)                                   # store 2sls results
-
+        # 2SLS w/ first stage F statistic
+        iv_results[r,:] = hcat(twosls(Ti,Yi,Tihat),fstat(Ti,Tihat))             # store 2sls results
     end
 
     # compute coverage probabilities
     iv_cp = Int(round(coverage_probability(iv_results,β)*100;digits=0))
     ols_cp = Int(round(coverage_probability(ols_results,β)*100;digits=0))
 
-    print("coverage probability is ",iv_cp,"% for IV estimate for ρ=",ρ,"\n")
-    print("coverage probability is ",ols_cp,"% for OLS estimate for ρ=",ρ,"\n")
+    print("coverage probability is ",iv_cp,"% for IV estimate for ρ=",ρ,".\n")
+    print("coverage probability is ",ols_cp,"% for OLS estimate for ρ=",ρ,".\n")
 
     # plot estimates
+    print("producing histogram of coefficient estimates.","\n")
     b = histogram(iv_results[:,1],bins=25,
                   xlabel="coefficient estimate",
                   ylabel="count (N=$iter)",
@@ -152,7 +171,25 @@ for ρ in rhos
     plot!(b,[β],seriestype="vline",linewidth=2,
                 label=string(L"\beta=2"),
                 color="red")
-    savefig(b,string("gravity_estimates_",ρ,".png"))
+    savefig(b,string("gravity_estimates_",ρ,"_test.png"))
+    print("histogram complete.","\n")
+
+    # plot F statistic density
+    print("producing density of F statistics.","\n")
+    f = iv_results[:,3]
+    xrange = Int(floor(minimum(f))):Int(ceil(maximum(f)))
+    f0 = kde(f);
+    f0_line= pdf(f0::UnivariateKDE, xrange);
+    xlims = 1:length(xrange)
+    Plots.plot!(fplot,f0_line,
+                color=c,
+                label="\\rho = $ρ",
+                xlabel="F statistic",
+                ylabel="density",
+                legend=:topright,
+                margin=5Plots.mm)
+    savefig(fplot,string("F_statistics_test.png"))
+    print("density complete.","\n")
 
 end
 
