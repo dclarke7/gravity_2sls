@@ -121,9 +121,10 @@ const iter = Int(1e3)                                                           
 ols_results = zeros(iter,2);                                                    # storage for estimates
 iv_results  = zeros(iter,3);                                                    # storage for estimates
 rhos = [0,0.1,0.5]                                                              # ρ = correlation coefficient between errors, or level of endogeneity
-fplot = Plots.plot()                                                            # plot for distribution of F statistics
+fplot = Plots.plot(label="")                                                    # plot for distribution of F statistics
 colors = ["black","red","green"]
 for (ρ,c) in zip(rhos,colors)
+    print(string("running simulations for ρ = ",ρ,"\n"))
     for r in 1:iter
         # set seed
         Random.seed!(r+1000);
@@ -159,28 +160,29 @@ for (ρ,c) in zip(rhos,colors)
         # 2SLS w/ first stage F statistic
         iv_results[r,:] = hcat(twosls(Ti,Yi,Tihat),fstat(Ti,Tihat,K))           # store 2sls results
     end
+    print("simulations complete.","\n")
 
     # compute coverage probabilities
     iv_cp = Int(round(coverage_probability(iv_results,β)*100;digits=0))
     ols_cp = Int(round(coverage_probability(ols_results,β)*100;digits=0))
 
-    print("coverage probability is ",iv_cp,"% for IV estimate for ρ=",ρ,".\n")
-    print("coverage probability is ",ols_cp,"% for OLS estimate for ρ=",ρ,".\n")
+    print("coverage probability is ",iv_cp,"% for IV estimate for ρ=",ρ,"\n")
+    print("coverage probability is ",ols_cp,"% for OLS estimate for ρ=",ρ,"\n")
 
     # plot estimates
     print("producing histogram of coefficient estimates.","\n")
     b = histogram(iv_results[:,1],bins=25,
                   xlabel="coefficient estimate",
                   ylabel="count (N=$iter)",
-                  label="\\beta_{IV} ($iv_cp% coverage)",
+                  label="\$\\beta_{IV} ($iv_cp\\% c.p.)\$",
                   legend=:topleft,
                   margin=5Plots.mm)
     histogram!(b,ols_results[:,1],bins=25,
-               label="\\beta_{OLS} ($ols_cp% coverage)")
+               label="\$\\beta_{OLS} ($ols_cp\\% c.p.)\$")
     plot!(b,[β],seriestype="vline",linewidth=2,
                 label=string(L"\beta=2"),
                 color="red")
-    savefig(b,string("gravity_estimates_",ρ,"_test.png"))
+    savefig(b,string("gravity_estimates_",ρ,".png"))
     print("histogram complete.","\n")
 
     # plot F statistic density
@@ -192,7 +194,7 @@ for (ρ,c) in zip(rhos,colors)
     xlims = 1:length(xrange)
     Plots.plot!(fplot,f0_line,
                 color=c,
-                label="\\rho = $ρ",
+                label="\$\\rho = $ρ\$",
                 title="F statistic (corrected for K distance instruments)",
                 xlabel="F statistic",
                 ylabel="density",
