@@ -52,18 +52,27 @@ function coverage_probability(x,β)
     cp = length(cp)/size(x,1)
 end
 
-# Compute first-stage F statistic
-function fstat(x,z)
-    k = size(z,2)                                                               # number of instruments
-    z = hcat(ones(N),z)                                                         # add constant
-    π_hat = inv(z'z)z'x                                                         # first stage regression coefficient
-    xhat = z*π_hat                                                              # fitted values
-    μ_hat = x - z*π_hat                                                         # first stage errors
-    # F statistic
-    xdm = xhat .- sum(x)/length(x)
-    mst = xdm'xdm/k
-    mse = μ_hat'μ_hat/(N-k-1)
-    F = mst/mse
+# Computes R² statistic (coefficient of determination)
+function r²(y,x)
+    N = size(y,1)
+    x = hcat(ones(N),x)
+    βhat = inv(x'x)x'y
+    R² = y'x * βhat * inv(y'y)
+    return R²
+end
+
+# Computes first-stage F statistic
+function fstat(y,x,k::Int64=1)
+    N = size(y,1)
+    if k==1; @assert size(x,2)==1; end                                          # ensure number of instruments is entered
+    x = hcat(ones(N),x)                                                         # add constant
+    π_hat = inv(x'x)x'y                                                         # first stage regression coefficient
+    yhat = x*π_hat                                                              # fitted values
+    μ_hat = y - yhat                                                            # first stage errors
+    ydm = yhat .- sum(y)/length(y)
+    msr = ydm'ydm / k
+    mse = μ_hat'μ_hat / (N-k-1)
+    F = msr/mse
     return F
 end
 
@@ -92,13 +101,13 @@ if simulate==1
 ###############################################################################
 # params
 
-β = 2   # true coefficient on trade
-N = 500 # number of countries
+const β = 2   # true coefficient on trade
+const N = 500 # number of countries
 
-# generate gammas for instruments
+# generate gammas for distance instruments
 γ_coeffs = [1,-1]                                    # instrument coefficients ("distance elasticities")
 N_γ = 2                                              # expands the number of instruments
-K = size(γ_coeffs,1)*N_γ                             # number of instruments
+const K = size(γ_coeffs,1)*N_γ                       # number of instruments
 γ = zeros(K+1)
 γ[1] = 1                                             # constant
 Z_size = 0.5                                         # strength of instruments
@@ -108,11 +117,11 @@ Z_size = 0.5                                         # strength of instruments
 ###############################################################################
 # Gravity Instrument Simulation
 
-iter = 10 # number of iterations
-ols_results = zeros(iter,2); # storage for estimates
-iv_results  = zeros(iter,3); # storage for estimates
-rhos = [0,0.1,0.5] # ρ is correlation between errors, or level of endogeneity
-fplot = Plots.plot() # plot for distribution of F statistics
+const iter = Int(1e3)                                                           # number of iterations
+ols_results = zeros(iter,2);                                                    # storage for estimates
+iv_results  = zeros(iter,3);                                                    # storage for estimates
+rhos = [0,0.1,0.5]                                                              # ρ = correlation coefficient between errors, or level of endogeneity
+fplot = Plots.plot()                                                            # plot for distribution of F statistics
 colors = ["black","red","green"]
 for (ρ,c) in zip(rhos,colors)
     for r in 1:iter
@@ -148,7 +157,7 @@ for (ρ,c) in zip(rhos,colors)
         ols_results[r,:] = [ β_hat_ols[2,1] , sqrt.(σ²[2,2]) ]                  # store ols results
 
         # 2SLS w/ first stage F statistic
-        iv_results[r,:] = hcat(twosls(Ti,Yi,Tihat),fstat(Ti,Tihat))             # store 2sls results
+        iv_results[r,:] = hcat(twosls(Ti,Yi,Tihat),fstat(Ti,Tihat,K))           # store 2sls results
     end
 
     # compute coverage probabilities
@@ -184,11 +193,12 @@ for (ρ,c) in zip(rhos,colors)
     Plots.plot!(fplot,f0_line,
                 color=c,
                 label="\\rho = $ρ",
+                title="F statistic (corrected for K distance instruments)",
                 xlabel="F statistic",
                 ylabel="density",
                 legend=:topright,
                 margin=5Plots.mm)
-    savefig(fplot,string("F_statistics_test.png"))
+    savefig(fplot,string("F_statistics.png"))
     print("density complete.","\n")
 
 end
